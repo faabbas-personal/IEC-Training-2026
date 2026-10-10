@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetLab Student Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky progress header over a single reading column; each lab step is a checklist row with click path + copyable commands */
+:root{
+  --paper:#F3F4F1; --surface:#FCFCFA; --ink:#14213A; --muted:#566176; --line:#D8DCE2;
+  --aws:#B8521F; --az:#2B67A8; --conv:#2E7A4E; --code-bg:#14213A; --code-fg:#E4EAF2;
+  --chip:#E9ECEF; --done:#8A93A3; --warn-bg:#FBE7D8; --warn-fg:#7A3412;
+  --sans:'IBM Plex Sans', 'Segoe UI', Arial, sans-serif; --mono:'IBM Plex Mono', Consolas, 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0E1522; --surface:#152033; --ink:#E4EAF2; --muted:#9BA8BB; --line:#283850;
+  --aws:#F0A062; --az:#82B2E6; --conv:#71C493; --code-bg:#09101B; --code-fg:#E4EAF2;
+  --chip:#1E2B40; --done:#6E7B8F; --warn-bg:#3A2416; --warn-fg:#F6C9A6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0E1522; --surface:#152033; --ink:#E4EAF2; --muted:#9BA8BB; --line:#283850;
+  --aws:#F0A062; --az:#82B2E6; --conv:#71C493; --code-bg:#09101B; --code-fg:#E4EAF2;
+  --chip:#1E2B40; --done:#6E7B8F; --warn-bg:#3A2416; --warn-fg:#F6C9A6; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:880px;margin-inline:auto}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);padding-block:16px 14px;display:flex;flex-direction:column;gap:12px}
+.titlerow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-size:1.35rem;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.count{font-family:var(--mono);font-size:.9rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{height:12px;background:var(--chip);border-radius:999px;overflow:hidden;display:flex}
+.bar span{display:block;height:100%;transition:width .3s ease}
+.minis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.mini{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:var(--ink);font-size:.85rem;min-width:0}
+.mini .lab{display:flex;justify-content:space-between;gap:6px;font-weight:600}
+.mini .lab b{font-family:var(--mono);font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
+.mini .t{height:6px;background:var(--chip);border-radius:999px;overflow:hidden}
+.mini .t i{display:block;height:100%;width:0;transition:width .3s ease}
+.mini:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--az);outline-offset:2px;border-radius:6px}
+.intro{display:flex;flex-direction:column;gap:10px;padding-block:20px 4px;color:var(--muted)}
+.intro p{margin:0;max-width:68ch}
+.rules{background:var(--warn-bg);color:var(--warn-fg);border-radius:10px;padding:12px 16px;font-size:.92rem}
+section.lab{display:flex;flex-direction:column;gap:12px;padding-block:28px 8px;scroll-margin-top:150px}
+.shead{display:flex;flex-direction:column;gap:4px;border-top:3px solid var(--sec);padding-top:14px}
+.shead .eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sec);font-weight:700}
+.shead h2{margin:0;font-size:1.5rem;text-wrap:balance}
+.shead p{margin:0;color:var(--muted);max-width:68ch}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 12px}
+.step input{width:22px;height:22px;margin-top:2px;accent-color:var(--sec);cursor:pointer}
+.step .body{display:flex;flex-direction:column;gap:10px;min-width:0}
+.step .h{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.step label{font-weight:600;font-size:1.02rem;cursor:pointer}
+.num{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.tag{font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
+.tag.free{color:var(--conv)} .tag.tour{background:var(--warn-bg);color:var(--warn-fg)} .tag.credits{color:var(--az)} .tag.opt{color:var(--muted)}
+.path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
+.path .k{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-right:4px}
+.crumb{background:var(--chip);border-radius:6px;padding:2px 8px}
+.sep{color:var(--muted)}
+.code{position:relative;background:var(--code-bg);border-radius:10px;min-width:0}
+.code pre{margin:0;padding:14px 16px 14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.84rem;line-height:1.55;color:var(--code-fg);white-space:pre}
+.code .cap{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 0 16px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:#9FB1C8}
+.copy{font:inherit;font-size:.75rem;letter-spacing:.04em;background:transparent;color:#C9D6E6;border:1px solid #3A4E6B;border-radius:6px;padding:3px 10px;cursor:pointer}
+.copy:hover{background:#22324B}
+.note{font-size:.9rem;color:var(--muted);margin:0}
+.step.done{opacity:.62}
+.step.done label{text-decoration:line-through;text-decoration-color:var(--done)}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center;padding-block:28px 0;color:var(--muted);font-size:.9rem}
+.btn{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.confirm{display:flex;gap:8px;align-items:center}
+@media (max-width:560px){.minis{grid-template-columns:1fr}.mini{flex-direction:row;align-items:center;gap:10px}.mini .lab{min-width:120px}.mini .t{flex:1}h1{font-size:1.15rem}section.lab{scroll-margin-top:200px}}
+@media (prefers-reduced-motion:reduce){.bar span,.mini .t i{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header class="top">
+  <div class="titlerow"><h1>NetLab Student Tracker</h1><span class="count" id="count">0 / 0 steps · 0%</span></div>
+  <div class="bar" id="bar" role="progressbar" aria-label="Overall lab progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+  <nav class="minis" id="minis" aria-label="Sections"></nav>
+</header>
+
+<div class="intro">
+  <p>Tick each step as you finish it. Every step shows where to click in the portal and the matching command for AWS CloudShell, Azure Cloud Shell or the Cisco IOS prompt. Your ticks are saved in this browser only.</p>
+  <p class="rules"><b>Free tier only.</b> Steps marked <b>Tour only</b> are paid services: open the create page, read it, then Cancel. Never create an AWS Organization or set up Control Tower on a Free plan account; both end your free credits.</p>
+</div>
+
+<main id="labs"></main>
+
+<div class="foot">
+  <span>IEC Husaini · Cloud &amp; Network Foundations</span>
+  <span id="resetArea"><button class="btn" id="resetBtn" type="button">Clear all ticks</button></span>
+</div>
+</div>
+
+<script>
+const SECTIONS = [
+{ id:'aws', name:'AWS', color:'var(--aws)', title:'AWS: VPC, subnets, routing, security and access',
+  blurb:'Region us-east-1. Build lab-vpc 10.0.0.0/16 with a public and a private subnet, then reach a private EC2 instance with and without a bastion. Open CloudShell from the terminal icon in the console top bar to use the commands.',
+  steps:[
+  {t:'Pick the region and set a zero-spend budget', tag:'free', path:['Console top bar','Region selector','US East (N. Virginia) us-east-1'],
+   path2:['Search "Budgets"','Create budget','Use a template','Zero spend budget','Email','Create budget'],
+   cmd:`aws configure get region          # should print us-east-1 in CloudShell
+aws sts get-caller-identity       # confirms which account and user you are`},
+  {t:'Create the VPC', tag:'free', path:['VPC','Your VPCs','Create VPC','VPC only','Name: lab-vpc','IPv4 CIDR 10.0.0.0/16','Create VPC'],
+   cmd:`VPC=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 \\
+  --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=lab-vpc}]' \\
+  --query Vpc.VpcId --output text); echo $VPC`},
+  {t:'Create the public and private subnets', tag:'free', path:['VPC','Subnets','Create subnet','VPC lab-vpc','lab-public us-east-1a 10.0.1.0/24','Add new subnet','lab-private us-east-1a 10.0.2.0/24','Create subnet'],
+   cmd:`PUB=$(aws ec2 create-subnet --vpc-id $VPC --cidr-block 10.0.1.0/24 \\
+  --availability-zone us-east-1a \\
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=lab-public}]' \\
+  --query Subnet.SubnetId --output text)
+PRIV=$(aws ec2 create-subnet --vpc-id $VPC --cidr-block 10.0.2.0/24 \\
+  --availability-zone us-east-1a \\
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=lab-private}]' \\
+  --query Subnet.SubnetId --output text)
+aws ec2 modify-subnet-attribute --subnet-id $PUB --map-public-ip-on-launch`,
+   note:'Checkpoint: each subnet shows 251 available IPv4 addresses (256 minus 5 reserved by AWS).'},
+  {t:'Create and attach the internet gateway', tag:'free', path:['VPC','Internet gateways','Create internet gateway','lab-igw','Actions','Attach to VPC','lab-vpc'],
+   cmd:`IGW=$(aws ec2 create-internet-gateway --query InternetGateway.InternetGatewayId --output text)
+aws ec2 attach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC`},
+  {t:'Create rt-public and the default route', tag:'free', path:['VPC','Route tables','Create route table','rt-public · lab-vpc','Routes','Edit routes','Add route 0.0.0.0/0 → Internet Gateway lab-igw','Subnet associations','✓ lab-public'],
+   cmd:`RT=$(aws ec2 create-route-table --vpc-id $VPC --query RouteTable.RouteTableId --output text)
+aws ec2 create-route --route-table-id $RT --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW
+aws ec2 associate-route-table --route-table-id $RT --subnet-id $PUB`,
+   note:'lab-private stays on the main route table, which only has the 10.0.0.0/16 local route. That is what makes it private.'},
+  {t:'Create security groups sg-web, sg-app and sg-eice', tag:'free', path:['VPC','Security groups','Create security group','sg-web: SSH 22 My IP · HTTP 80 Anywhere · All ICMP 10.0.0.0/16','sg-app: SSH 22 from sg-web · All ICMP 10.0.0.0/16','sg-eice: no inbound'],
+   cmd:`MYIP=203.0.113.25/32   # replace with your laptop's IP (open checkip.amazonaws.com on your laptop)
+SGWEB=$(aws ec2 create-security-group --group-name sg-web --description "web tier" --vpc-id $VPC --query GroupId --output text)
+aws ec2 authorize-security-group-ingress --group-id $SGWEB --protocol tcp --port 22 --cidr $MYIP
+aws ec2 authorize-security-group-ingress --group-id $SGWEB --protocol tcp --port 80 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id $SGWEB --protocol icmp --port -1 --cidr 10.0.0.0/16
+SGAPP=$(aws ec2 create-security-group --group-name sg-app --description "app tier" --vpc-id $VPC --query GroupId --output text)
+aws ec2 authorize-security-group-ingress --group-id $SGAPP --protocol tcp --port 22 --source-group $SGWEB
+aws ec2 authorize-security-group-ingress --group-id $SGAPP --protocol icmp --port -1 --cidr 10.0.0.0/16
+SGEICE=$(aws ec2 create-security-group --group-name sg-eice --description "EIC endpoint" --vpc-id $VPC --query GroupId --output text)`,
+   note:'Security groups are stateful: return traffic is allowed automatically, and there are only allow rules.'},
+  {t:'Create the stateless network ACL (optional)', tag:'opt', path:['VPC','Network ACLs','Create network ACL','nacl-public · lab-vpc','Inbound rules: 100 TCP 22 your-IP/32 · 110 TCP 80 0.0.0.0/0 · 120 TCP 1024-65535 0.0.0.0/0','Outbound rules: 100 All traffic 0.0.0.0/0','Subnet associations','✓ lab-public'],
+   cmd:`NACL=$(aws ec2 create-network-acl --vpc-id $VPC --query NetworkAcl.NetworkAclId --output text)
+aws ec2 create-network-acl-entry --network-acl-id $NACL --ingress --rule-number 100 --protocol tcp --port-range From=22,To=22 --cidr-block $MYIP --rule-action allow
+aws ec2 create-network-acl-entry --network-acl-id $NACL --ingress --rule-number 110 --protocol tcp --port-range From=80,To=80 --cidr-block 0.0.0.0/0 --rule-action allow
+aws ec2 create-network-acl-entry --network-acl-id $NACL --ingress --rule-number 120 --protocol tcp --port-range From=1024,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow
+aws ec2 create-network-acl-entry --network-acl-id $NACL --egress --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow
+# Associate it in the console: Network ACLs > nacl-public > Subnet associations > Edit`},
+  {t:'Create a key pair and launch web-1 in the public subnet', tag:'credits', path:['EC2','Instances','Launch instances','Name web-1','Amazon Linux 2023','t3.micro','Key pair: Create new lab-key (.pem)','Network settings: Edit','lab-vpc · lab-public · Auto-assign public IP Enable · sg-web','Launch instance'],
+   cmd:`aws ec2 create-key-pair --key-name lab-key --query KeyMaterial --output text > lab-key.pem && chmod 400 lab-key.pem
+AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query Parameter.Value --output text)
+aws ec2 run-instances --image-id $AMI --instance-type t3.micro --key-name lab-key \\
+  --subnet-id $PUB --security-group-ids $SGWEB \\
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=web-1}]'`,
+   note:'If you created the key in CloudShell, use Actions > Download file to copy lab-key.pem to your laptop.'},
+  {t:'Launch app-1 in the private subnet', tag:'credits', path:['EC2','Launch instances','Name app-1','Amazon Linux 2023 · t3.micro · lab-key','Network settings: Edit','lab-private · Auto-assign public IP Disable · sg-app','Launch instance'],
+   cmd:`aws ec2 run-instances --image-id $AMI --instance-type t3.micro --key-name lab-key \\
+  --subnet-id $PRIV --security-group-ids $SGAPP \\
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=app-1}]'
+aws ec2 describe-instances --filters Name=vpc-id,Values=$VPC \\
+  --query 'Reservations[].Instances[].[Tags[?Key==\`Name\`]|[0].Value,PrivateIpAddress,PublicIpAddress]' --output table`,
+   note:'Checkpoint: web-1 has a public IP and 10.0.1.x; app-1 has only 10.0.2.x.'},
+  {t:'Connect to web-1 directly (public instance)', tag:'free', path:['EC2','Instances','web-1','Connect','EC2 Instance Connect','Connect'],
+   cmd:`# From your laptop terminal:
+ssh -i lab-key.pem ec2-user@<web-1-public-IP>
+# Then, on web-1:
+ip addr show
+ip route                 # default via 10.0.1.1, the VPC router
+ping -c 3 <app-1-private-IP>`,
+   note:'Browser-based EC2 Instance Connect needs an SSH rule in sg-web from the prefix list com.amazonaws.us-east-1.ec2-instance-connect.'},
+  {t:'Reach app-1 through web-1 as a classic bastion', tag:'free', path:['Your laptop terminal'],
+   cmd:`ssh-add lab-key.pem
+ssh -J ec2-user@<web-1-public-IP> ec2-user@<app-1-private-IP>`,
+   note:'Works because sg-app allows SSH from sg-web. The bastion is a server you must patch and protect.'},
+  {t:'Reach app-1 with no bastion: EC2 Instance Connect Endpoint', tag:'free', path:['VPC','Endpoints','Create endpoint','Type: EC2 Instance Connect Endpoint','VPC lab-vpc · SG sg-eice · Subnet lab-private','Create'],
+   path2:['Security groups','sg-app','Edit inbound rules','SSH 22 from sg-eice'],
+   cmd:`aws ec2 create-instance-connect-endpoint --subnet-id $PRIV --security-group-ids $SGEICE
+aws ec2 authorize-security-group-ingress --group-id $SGAPP --protocol tcp --port 22 --source-group $SGEICE
+# wait until the endpoint state is create-complete, then:
+aws ec2-instance-connect ssh --instance-id <app-1-instance-id> --connection-type eice`,
+   note:'Console alternative: EC2 > app-1 > Connect > EC2 Instance Connect > Connect using a Private IP > choose the endpoint > Connect.'},
+  {t:'Prove the NACL is stateless (optional)', tag:'opt', path:['VPC','Network ACLs','nacl-public','Outbound rules','Edit','Remove rule 100','Save'],
+   cmd:`# Keep an SSH session to web-1 open while you remove the outbound rule.
+# The session freezes: replies are no longer allowed out.
+# Put outbound rule 100 back and the session recovers.`},
+  {t:'Tour the paid security services', tag:'tour', path:['VPC','Network Firewall','Firewalls','Create firewall','read','Cancel'],
+   path2:['WAF & Shield','Shield','read Standard vs Advanced','EC2','Load balancers','Create','Application Load Balancer','read','Cancel'],
+   cmd:`# No commands: these services bill hourly or monthly.`},
+  {t:'Tour the landing zone setup (do not deploy)', tag:'tour', path:['Control Tower','Set up landing zone','read Region, OUs, Log Archive and Audit accounts','STOP'],
+   cmd:`# Do NOT click "Set up landing zone" and do NOT create an Organization.
+# On a Free plan account either action upgrades you to Paid and ends your credits.`},
+  {t:'Clean up AWS', tag:'free', path:['EC2','Instances','select web-1 and app-1','Instance state','Terminate'],
+   path2:['VPC','Endpoints','delete endpoint','Your VPCs','lab-vpc','Actions','Delete VPC'],
+   cmd:`aws ec2 terminate-instances --instance-ids <web-1-id> <app-1-id>
+aws ec2 delete-instance-connect-endpoint --instance-connect-endpoint-id <eice-id>
+aws ec2 delete-key-pair --key-name lab-key
+# When instances show terminated, delete lab-vpc in the console (removes subnets, IGW, route tables, NACL, SGs).`}
+  ]},
+{ id:'azure', name:'Azure', color:'var(--az)', title:'Azure: VNet, NSGs, VMs, Bastion and routes',
+  blurb:'Region East US 2 (supports the free Bastion Developer SKU). Build vnet-lab 10.1.0.0/16 with snet-web and snet-app. Open Cloud Shell from the top bar, choose Bash and "No storage account required".',
+  steps:[
+  {t:'Open Cloud Shell and set a budget', tag:'free', path:['Search "Cost Management"','Budgets','+ Add','budget-lab · Monthly · 5','Alerts 50% and 100%','Create'],
+   cmd:`az account show -o table
+az account list-locations --query "[?name=='eastus2']" -o table`},
+  {t:'Create the resource group', tag:'free', path:['Resource groups','+ Create','rg-netlab','Region East US 2','Review + create','Create'],
+   cmd:`az group create -n rg-netlab -l eastus2 --tags Owner=<yourname> Lab=netlab`},
+  {t:'Create vnet-lab with snet-web and snet-app', tag:'free', path:['Virtual networks','+ Create','Basics: rg-netlab · vnet-lab · East US 2','Security: leave Bastion, Firewall, DDoS off','IP addresses: 10.1.0.0/16 · delete "default"','+ Add subnet snet-web 10.1.1.0/24','+ Add subnet snet-app 10.1.2.0/24','Review + create'],
+   cmd:`az network vnet create -g rg-netlab -n vnet-lab --address-prefixes 10.1.0.0/16 \\
+  --subnet-name snet-web --subnet-prefixes 10.1.1.0/24
+az network vnet subnet create -g rg-netlab --vnet-name vnet-lab -n snet-app --address-prefixes 10.1.2.0/24
+az network vnet subnet list -g rg-netlab --vnet-name vnet-lab -o table`,
+   note:'Checkpoint: each subnet has 251 usable addresses (Azure also reserves 5).'},
+  {t:'Create nsg-web and attach it to snet-web', tag:'free', path:['Network security groups','+ Create','nsg-web','Inbound security rules','+ Add: My IP address → 22 TCP Allow priority 100','+ Add: Service Tag Internet → 80 priority 110','Subnets','+ Associate','vnet-lab / snet-web'],
+   cmd:`MYIP=203.0.113.25   # replace with your laptop's public IP
+az network nsg create -g rg-netlab -n nsg-web
+az network nsg rule create -g rg-netlab --nsg-name nsg-web -n Allow-SSH-MyIP --priority 100 \\
+  --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes $MYIP
+az network nsg rule create -g rg-netlab --nsg-name nsg-web -n Allow-HTTP --priority 110 \\
+  --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 80 --source-address-prefixes Internet
+az network vnet subnet update -g rg-netlab --vnet-name vnet-lab -n snet-web --network-security-group nsg-web`},
+  {t:'Create nsg-app and attach it to snet-app', tag:'free', path:['Network security groups','+ Create','nsg-app','Inbound: 10.1.1.0/24 → 22 priority 100','Inbound: 168.63.129.16 → 22 priority 110','Subnets','+ Associate','snet-app'],
+   cmd:`az network nsg create -g rg-netlab -n nsg-app
+az network nsg rule create -g rg-netlab --nsg-name nsg-app -n Allow-SSH-from-web --priority 100 \\
+  --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes 10.1.1.0/24
+az network nsg rule create -g rg-netlab --nsg-name nsg-app -n Allow-Bastion-Dev --priority 110 \\
+  --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes 168.63.129.16
+az network vnet subnet update -g rg-netlab --vnet-name vnet-lab -n snet-app --network-security-group nsg-app
+az network nsg rule list -g rg-netlab --nsg-name nsg-app --include-default -o table`,
+   note:'168.63.129.16 is the Azure platform address Bastion Developer connects from. Look for the default rules 65000, 65001 and 65500.'},
+  {t:'Create an application security group (optional)', tag:'opt', path:['Application security groups','+ Create','asg-web','vm-web NIC','Application security groups','Add asg-web'],
+   cmd:`az network asg create -g rg-netlab -n asg-web
+# Then use asg-web as a rule source or destination instead of an IP range.`},
+  {t:'Deploy vm-web (B1s, public IP) in snet-web', tag:'free', path:['Virtual machines','+ Create','Azure virtual machine','vm-web · East US 2 · Ubuntu Server 24.04 LTS','Size Standard_B1s','SSH public key · azureuser · new key lab-key','Public inbound ports None','Networking: snet-web · Public IP new · NIC NSG None','Review + create','Download private key'],
+   cmd:`az vm create -g rg-netlab -n vm-web --image Ubuntu2404 --size Standard_B1s \\
+  --vnet-name vnet-lab --subnet snet-web --nsg "" --public-ip-sku Standard \\
+  --admin-username azureuser --generate-ssh-keys`},
+  {t:'Deploy vm-app (B1s, no public IP) in snet-app', tag:'free', path:['Virtual machines','+ Create','vm-app · same settings','Networking: snet-app · Public IP None · NIC NSG None','Use existing key lab-key','Create'],
+   cmd:`az vm create -g rg-netlab -n vm-app --image Ubuntu2404 --size Standard_B1s \\
+  --vnet-name vnet-lab --subnet snet-app --nsg "" --public-ip-address "" \\
+  --admin-username azureuser --generate-ssh-keys
+az vm list-ip-addresses -g rg-netlab -o table`,
+   note:'If East US 2 has no B1s capacity, recreate the lab in Central US, which also supports Bastion Developer.'},
+  {t:'Connect to vm-app with Bastion Developer', tag:'free', path:['Virtual machines','vm-app','Connect','Bastion','Deploy Bastion Developer','Authentication: SSH Private Key from Local File','lab-key.pem','Connect'],
+   cmd:`# Portal only. In the browser session:
+ip addr show
+ip route`,
+   note:'Free, shared infrastructure: no AzureBastionSubnet, no public IP, one VM connection at a time, same VNet only.'},
+  {t:'Connect without a bastion: SSH jump and Run command', tag:'free', path:['vm-app','Operations','Run command','RunShellScript','ip addr; ip route','Run'],
+   cmd:`# From your laptop, through vm-web:
+ssh-add lab-key.pem
+ssh -J azureuser@<vm-web-public-IP> azureuser@10.1.2.4
+
+# No network path at all, from Cloud Shell:
+az vm run-command invoke -g rg-netlab -n vm-app --command-id RunShellScript --scripts "ip addr; ip route"`,
+   note:'Serial console (Help > Serial console) is another break-glass option; it needs boot diagnostics and a password user.'},
+  {t:'Add a user-defined route that blocks internet from snet-app', tag:'free', path:['Route tables','+ Create','rt-app · Propagate gateway routes No','Routes','+ Add: 0.0.0.0/0 · Next hop None','Subnets','+ Associate','snet-app'],
+   cmd:`az network route-table create -g rg-netlab -n rt-app --disable-bgp-route-propagation true
+az network route-table route create -g rg-netlab --route-table-name rt-app -n block-internet \\
+  --address-prefix 0.0.0.0/0 --next-hop-type None
+az network vnet subnet update -g rg-netlab --vnet-name vnet-lab -n snet-app --route-table rt-app
+az network nic show-effective-route-table -g rg-netlab -n vm-appVMNic -o table
+# In your vm-app SSH session:  curl -m 5 -I https://www.microsoft.com   (now times out)`,
+   note:'Effective routes shows source "User" overriding the "Default" 0.0.0.0/0 → Internet route.'},
+  {t:'Tour the paid security services', tag:'tour', path:['Firewalls','+ Create','read tiers, policy, AzureFirewallSubnet /26','Cancel'],
+   path2:['Application gateways','+ Create','read Standard v2 / WAF v2','Cancel','DDoS protection plans','+ Create','read','Cancel'],
+   cmd:`# No commands: Azure Firewall, Application Gateway and DDoS Network Protection bill hourly or monthly.`},
+  {t:'Build a mini landing zone: management groups and policy', tag:'free', path:['Management groups','Start using management groups','+ Create mg-iec','+ Create mg-platform, mg-landingzones, mg-sandbox under mg-iec','Subscription ⋯ Move → mg-sandbox'],
+   path2:['Policy','Assignments','Assign policy','Scope mg-iec','Allowed locations','East US 2','Review + create'],
+   cmd:`az account management-group create --name mg-iec --display-name "IEC"
+az account management-group create --name mg-platform --parent mg-iec
+az account management-group create --name mg-landingzones --parent mg-iec
+az account management-group create --name mg-sandbox --parent mg-iec
+az account management-group subscription add --name mg-sandbox --subscription $(az account show --query id -o tsv)
+az policy assignment create --name allowed-locations \\
+  --scope /providers/Microsoft.Management/managementGroups/mg-iec \\
+  --policy e56962a6-4747-49cd-b67b-bf8b01975c4c \\
+  --params '{"listOfAllowedLocations":{"value":["eastus2"]}}'
+# Test (may take a few minutes to apply): this should be denied
+az network public-ip create -g rg-netlab -n pip-test -l westeurope`},
+  {t:'Tour the Azure landing zone portal accelerator (do not deploy)', tag:'tour', path:['Microsoft Learn','"Azure platform landing zone portal accelerator"','Deploy to Azure','read each tab','Cancel'],
+   cmd:`# Do not deploy: it can create Log Analytics, Azure Firewall, DDoS plans and more.`},
+  {t:'Clean up Azure', tag:'free', path:['Resource groups','rg-netlab','Delete resource group','type the name','Delete'],
+   path2:['Policy','Assignments','allowed-locations','Delete assignment'],
+   cmd:`az group delete -n rg-netlab --yes --no-wait
+az policy assignment delete --name allowed-locations \\
+  --scope /providers/Microsoft.Management/managementGroups/mg-iec`}
+  ]},
+{ id:'conventional', name:'Conventional', color:'var(--conv)', title:'Conventional: Packet Tracer routing, switching, DHCP and DNS',
+  blurb:'Cisco Packet Tracer. R1 router-on-a-stick, R2 as ISP, SW1 with VLAN 10 (Staff, 192.168.10.0/24) and VLAN 20 (Students, 192.168.20.0/24), DHCP on R1, DNS and web on Server0. Commands are typed in each device\'s CLI tab.',
+  steps:[
+  {t:'Install and open Packet Tracer', tag:'free', path:['netacad.com','Resources','Download Packet Tracer','Install','Sign in with your NetAcad account'],
+   cmd:`# Windows, macOS and Ubuntu installers are available. Use the latest 8.x or newer.`},
+  {t:'Place devices and cable them', tag:'free', path:['Network Devices','Routers: 4331 ×2 (R1, R2)','Switches: 2960 (SW1)','End Devices: PC ×4, Server ×1','Connections: Automatically Choose Connection Type'],
+   cmd:`PC0 Fa0  -> SW1 Fa0/1     (VLAN 10)
+PC1 Fa0  -> SW1 Fa0/2     (VLAN 10)
+PC2 Fa0  -> SW1 Fa0/11    (VLAN 20)
+PC3 Fa0  -> SW1 Fa0/12    (VLAN 20)
+Server0  -> SW1 Fa0/24    (VLAN 10)
+SW1 Gig0/1   -> R1 Gig0/0/0   (trunk)
+R1 Gig0/0/1  -> R2 Gig0/0/1   (10.0.0.0/30)`},
+  {t:'Create VLANs and access ports on SW1', tag:'free', path:['SW1','CLI'],
+   cmd:`enable
+configure terminal
+hostname SW1
+vlan 10
+ name STAFF
+vlan 20
+ name STUDENTS
+interface range fa0/1 - 2
+ switchport mode access
+ switchport access vlan 10
+interface range fa0/11 - 12
+ switchport mode access
+ switchport access vlan 20
+interface fa0/24
+ switchport mode access
+ switchport access vlan 10
+end
+show vlan brief`},
+  {t:'Make Gig0/1 a trunk to R1', tag:'free', path:['SW1','CLI'],
+   cmd:`configure terminal
+interface gig0/1
+ switchport mode trunk
+end
+show interfaces trunk`},
+  {t:'Configure R1 sub-interfaces (inter-VLAN routing)', tag:'free', path:['R1','CLI'],
+   cmd:`enable
+configure terminal
+hostname R1
+interface gig0/0/0
+ no shutdown
+interface gig0/0/0.10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+interface gig0/0/0.20
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+interface gig0/0/1
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+end`},
+  {t:'Configure DHCP pools on R1', tag:'free', path:['R1','CLI'],
+   cmd:`configure terminal
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.20.1 192.168.20.10
+ip dhcp pool STAFF
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.10.5
+ip dhcp pool STUDENTS
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1
+ dns-server 192.168.10.5
+end`},
+  {t:'Set up Server0 as DNS and web server', tag:'free', path:['Server0','Desktop','IP Configuration','Static 192.168.10.5 / 255.255.255.0 · GW 192.168.10.1 · DNS 192.168.10.5'],
+   path2:['Server0','Services','DNS','On','Name www.iec.lab · Type A Record · Address 192.168.10.5','Add','Services','HTTP','On','Services','DHCP','Off'],
+   cmd:`# GUI only. Confirm HTTP is On and the DHCP service on the server is Off,
+# so only R1 hands out addresses.`},
+  {t:'Set PCs to DHCP and check their leases', tag:'free', path:['PC0','Desktop','IP Configuration','DHCP'],
+   cmd:`# On each PC: Desktop > Command Prompt
+ipconfig /all
+# Expect 192.168.10.11+ (VLAN 10) or 192.168.20.11+ (VLAN 20), gateway .1, DNS 192.168.10.5
+# On R1:
+show ip dhcp binding`},
+  {t:'Configure R2 as the ISP and add static routes', tag:'free', path:['R2','CLI'],
+   cmd:`! R2
+enable
+configure terminal
+hostname R2
+interface gig0/0/1
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+interface loopback0
+ ip address 8.8.8.8 255.255.255.255
+ip route 192.168.10.0 255.255.255.0 10.0.0.1
+ip route 192.168.20.0 255.255.255.0 10.0.0.1
+end
+
+! R1
+configure terminal
+ip route 0.0.0.0 0.0.0.0 10.0.0.2
+end
+show ip route`},
+  {t:'Verify routing, switching, DHCP and DNS', tag:'free', path:['PC0','Desktop','Command Prompt · Web Browser'],
+   cmd:`ping 192.168.20.11          (VLAN 10 to VLAN 20 through R1)
+tracert 8.8.8.8             (two hops: R1, then R2)
+nslookup www.iec.lab
+# Web Browser: http://www.iec.lab
+# SW1:  show mac address-table
+# R1:   show ip interface brief`},
+  {t:'Watch the packets in Simulation mode', tag:'free', path:['Simulation (bottom right)','Edit Filters: ARP, DHCP, DNS, ICMP','PC0 Command Prompt: ipconfig /renew','Play'],
+   cmd:`# Watch DHCP Discover, Offer, Request, Ack,
+# then ARP for the gateway, then the DNS query when you browse to www.iec.lab.`},
+  {t:'Save your work', tag:'free', path:['File','Save As','netlab-yourname.pkt'],
+   cmd:`! On R1, R2 and SW1:
+copy running-config startup-config`}
+  ]}
+];
+
+const KEY='netlab-student-v1';
+let state={};
+try{ state=JSON.parse(localStorage.getItem(KEY)||'{}')||{} }catch(e){ state={} }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)) }catch(e){} }
+
+function el(tag, cls, text){ const n=document.createElement(tag); if(cls) n.className=cls; if(text!=null) n.textContent=text; return n }
+const TAGS={free:'Free',credits:'Uses credits',tour:'Tour only',opt:'Optional'};
+
+function pathRow(label, parts){
+  const row=el('div','path'); row.appendChild(el('span','k',label));
+  parts.forEach((p,i)=>{ if(i) row.appendChild(el('span','sep','›')); row.appendChild(el('span','crumb',p)) });
+  return row;
+}
+
+function render(){
+  const main=document.getElementById('labs'), minis=document.getElementById('minis'), bar=document.getElementById('bar');
+  SECTIONS.forEach(sec=>{
+    const s=el('section','lab'); s.id=sec.id; s.style.setProperty('--sec',sec.color);
+    const h=el('div','shead');
+    h.appendChild(el('span','eyebrow',sec.name+' · '+sec.steps.length+' steps'));
+    h.appendChild(el('h2',null,sec.title)); h.appendChild(el('p',null,sec.blurb));
+    s.appendChild(h);
+    sec.steps.forEach((st,i)=>{
+      const id=sec.id+'-'+(i+1);
+      const card=el('div','step'); card.dataset.id=id;
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.id='cb-'+id; cb.checked=!!state[id];
+      cb.addEventListener('change',()=>{ state[id]=cb.checked; save(); card.classList.toggle('done',cb.checked); update() });
+      const body=el('div','body');
+      const hd=el('div','h');
+      hd.appendChild(el('span','num',String(i+1).padStart(2,'0')));
+      const lb=el('label',null,st.t); lb.htmlFor=cb.id; hd.appendChild(lb);
+      hd.appendChild(el('span','tag '+st.tag,TAGS[st.tag]));
+      body.appendChild(hd);
+      body.appendChild(pathRow(sec.id==='conventional'?'Where':'Click',st.path));
+      if(st.path2) body.appendChild(pathRow('Then',st.path2));
+      if(st.cmd){
+        const c=el('div','code'); const cap=el('div','cap');
+        cap.appendChild(el('span',null, sec.id==='aws'?'AWS CloudShell':sec.id==='azure'?'Azure Cloud Shell (Bash)':'Device CLI / notes'));
+        const b=el('button','copy','Copy'); b.type='button';
+        const pre=el('pre',null,st.cmd);
+        b.addEventListener('click',()=>{
+          const done=()=>{ b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1400) };
+          try{ navigator.clipboard.writeText(st.cmd).then(done,()=>selectText(pre)) }catch(e){ selectText(pre) }
+        });
+        cap.appendChild(b); c.appendChild(cap); c.appendChild(pre); body.appendChild(c);
+      }
+      if(st.note) body.appendChild(el('p','note',st.note));
+      card.appendChild(cb); card.appendChild(body);
+      if(cb.checked) card.classList.add('done');
+      s.appendChild(card);
+    });
+    main.appendChild(s);
+    const a=el('a','mini'); a.href='#'+sec.id;
+    const lab=el('span','lab'); lab.appendChild(el('span',null,sec.name)); const b=el('b',null,''); b.id='mc-'+sec.id; lab.appendChild(b);
+    const t=el('span','t'); const fill=el('i'); fill.id='mf-'+sec.id; fill.style.background=sec.color; t.appendChild(fill);
+    a.appendChild(lab); a.appendChild(t); minis.appendChild(a);
+    const seg=el('span'); seg.id='seg-'+sec.id; seg.style.background=sec.color; bar.appendChild(seg);
+  });
+  update();
+}
+function selectText(node){ const r=document.createRange(); r.selectNodeContents(node); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r) }
+
+function update(){
+  let total=0, done=0;
+  SECTIONS.forEach(sec=>{ total+=sec.steps.length });
+  SECTIONS.forEach(sec=>{
+    const n=sec.steps.length; let d=0;
+    sec.steps.forEach((_,i)=>{ if(state[sec.id+'-'+(i+1)]) d++ });
+    done+=d;
+    document.getElementById('mc-'+sec.id).textContent=d+'/'+n;
+    document.getElementById('mf-'+sec.id).style.width=(n?d/n*100:0)+'%';
+    document.getElementById('seg-'+sec.id).style.width=(total?d/total*100:0)+'%';
+  });
+  const pct=total?Math.round(done/total*100):0;
+  document.getElementById('count').textContent=done+' / '+total+' steps · '+pct+'%';
+  document.getElementById('bar').setAttribute('aria-valuenow',pct);
+}
+
+function askReset(){
+  const area=document.getElementById('resetArea'); area.innerHTML='';
+  const wrap=el('span','confirm'); wrap.appendChild(el('span',null,'Clear every tick?'));
+  const yes=el('button','btn','Clear'); yes.type='button';
+  const no=el('button','btn','Keep'); no.type='button';
+  yes.addEventListener('click',()=>{ state={}; save(); document.querySelectorAll('.step input').forEach(c=>{c.checked=false}); document.querySelectorAll('.step').forEach(c=>c.classList.remove('done')); update(); restore() });
+  no.addEventListener('click',restore);
+  wrap.appendChild(yes); wrap.appendChild(no); area.appendChild(wrap); yes.focus();
+  function restore(){ area.innerHTML=''; const b=el('button','btn','Clear all ticks'); b.type='button'; b.id='resetBtn'; b.addEventListener('click',askReset); area.appendChild(b) }
+}
+document.getElementById('resetBtn').addEventListener('click',askReset);
+render();
+</script>
+
+</body>
+</html>
